@@ -1,0 +1,12 @@
+# 构建产物
+.build/
+dist/
+DerivedData/
+
+# XcodeGen 生成物（由 project.yml 再生）
+*.xcodeproj
+Generated/
+
+# 系统与本地配置
+.DS_Store
+.claude/

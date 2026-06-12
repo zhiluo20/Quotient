@@ -1,0 +1,74 @@
+name: Quotient
+options:
+  deploymentTarget:
+    macOS: "15.0"
+  groupSortPosition: top
+
+settings:
+  base:
+    DEVELOPMENT_TEAM: 97C4PCWN4C
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: Apple Development
+    SWIFT_VERSION: "5.10"
+
+targets:
+  Quotient:
+    type: application
+    platform: macOS
+    sources:
+      - Sources/App
+      - Sources/Shared
+      - path: Resources
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: local.quotient
+        ENABLE_HARDENED_RUNTIME: false
+    info:
+      path: Generated/App-Info.plist
+      properties:
+        CFBundleDisplayName: Quotient
+        CFBundleShortVersionString: "1.0.0"
+        CFBundleVersion: "1"
+        CFBundleIconFile: AppIcon
+        LSUIElement: true
+        NSHighResolutionCapable: true
+        NSHumanReadableCopyright: "© 2026 Zhi Luo"
+        CFBundleDevelopmentRegion: zh-Hans
+        CFBundleLocalizations:
+          - zh-Hans
+          - en
+    entitlements:
+      path: Generated/App.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - 97C4PCWN4C.quotient
+    dependencies:
+      - target: QuotientWidget
+        embed: true
+
+  QuotientWidget:
+    type: app-extension
+    platform: macOS
+    sources:
+      - Sources/Widget
+      - Sources/Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: local.quotient.widget
+        ENABLE_HARDENED_RUNTIME: false
+        SKIP_INSTALL: true
+    info:
+      path: Generated/Widget-Info.plist
+      properties:
+        CFBundleDisplayName: Quotient
+        CFBundleShortVersionString: "1.0.0"
+        CFBundleVersion: "1"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: Generated/Widget.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.application-groups:
+          - 97C4PCWN4C.quotient
