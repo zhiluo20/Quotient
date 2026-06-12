@@ -24,7 +24,7 @@ macOS 桌面小组件，用红 / 黄 / 绿 LED 实时显示本机 **Codex** 和 
 
 ## 构建与发布
 
-需要 macOS 15+、Xcode、XcodeGen（`brew install xcodegen`）以及一张 Apple Development 签名证书（Widget 扩展必须真实签名；Team ID 写在 `project.yml` 与 `Snapshot.swift` 的 App Group ID 中，注意 Team ID 是证书 OU 字段，不是证书名称括号里的串）。Liquid Glass 效果需要 macOS 26。
+需要 macOS 15+、Xcode、XcodeGen（`brew install xcodegen`）以及一张 Apple Development 签名证书（Widget 扩展必须真实签名；Team ID 写在 `project.yml` 与 `Snapshot.swift` 的 App Group ID 中，注意 Team ID 是证书 OU 字段，不是证书名称括号里的串；克隆构建时请替换为你自己的 Team ID）。Liquid Glass 效果需要 macOS 26。
 
 ```sh
 ./build.sh                # 构建 dist/Quotient.app 并打包 dist/Quotient-1.0.0.zip
@@ -35,6 +35,14 @@ open dist/Quotient.app
 应用以无 Dock 图标形态运行（菜单栏有 LED 圆点菜单），退出走菜单或悬浮窗 ✕。首次启动后系统才会把小组件登记进组件画廊。
 
 > 分发说明：当前用 Apple Development 证书签名，仅限本机/同开发者设备运行。要公开分发需要付费开发者账号的 Developer ID 证书 + 公证（notarization），把 `project.yml` 里的 `CODE_SIGN_IDENTITY` 换成 `Developer ID Application` 并执行 `xcrun notarytool` 即可。
+
+## 致谢
+
+本项目受 [xicunwus2025-sys/codex-led-widget](https://github.com/xicunwus2025-sys/codex-led-widget) 启发而来——红绿灯式额度指示的创意来自该项目。
+
+## 许可
+
+[MIT](LICENSE) © 2026 Zhi Luo
 
 ## 工程结构
 
