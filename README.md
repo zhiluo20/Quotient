@@ -2,6 +2,24 @@
 
 macOS 桌面小组件，用红 / 黄 / 绿 LED 实时显示本机 **Codex** 和 **Claude Code** 的剩余额度，不用打开命令行就能一眼看到额度状态。
 
+## 截图
+
+**液态玻璃悬浮窗**——可置顶、可拖动，悬停浮现控制按钮（置顶 / 设置 / 刷新 / 隐藏 / 退出）：
+
+<img src="screenshot/main-panel.png" width="440" alt="主界面悬浮窗">
+
+**系统原生桌面小组件**——和日历、天气一样放在桌面上，全彩模式下 LED 与进度条按额度着色：
+
+<img src="screenshot/desktop-widget.png" width="600" alt="桌面小组件（全彩模式）">
+
+桌面**单色（frosted）模式**下自动切换为不透明度对比方案，进度条依然清晰可读：
+
+<img src="screenshot/widget-monochrome.png" width="420" alt="桌面小组件（单色模式）">
+
+**组件画廊**——右键桌面 →「编辑小组件」→ 搜索 "Quotient"，提供小、中两种尺寸：
+
+<img src="screenshot/widget-gallery.png" width="600" alt="组件画廊">
+
 ## 功能
 
 - 🟢 **红绿灯额度状态**：剩余 ≥ 10% 绿灯；0 < 剩余 < 10% 黄灯；剩余 0 红灯。
