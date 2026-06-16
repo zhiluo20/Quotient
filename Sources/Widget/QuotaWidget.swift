@@ -1,3 +1,4 @@
+import AppIntents
 import SwiftUI
 import WidgetKit
 
@@ -10,13 +11,53 @@ struct QuotientWidgetBundle: WidgetBundle {
 
 struct QuotientWidget: Widget {
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "Quotient", provider: Provider()) { entry in
+        AppIntentConfiguration(kind: "Quotient",
+                               intent: SelectServicesIntent.self,
+                               provider: Provider()) { entry in
             QuotaWidgetView(entry: entry)
         }
         .configurationDisplayName("Quotient")
-        .description("Codex & Claude quota at a glance")
+        .description("Codex / Claude / Gemini quota at a glance")
         .supportedFamilies([.systemSmall, .systemMedium])
     }
+}
+
+// MARK: - 每个 widget 实例可独立配置显示哪些服务（原生编辑小组件）
+
+enum ServiceChoice: String, AppEnum {
+    case followApp, codex, claude, gemini, codexClaude, codexGemini, claudeGemini
+
+    static var typeDisplayRepresentation: TypeDisplayRepresentation = "Services"
+    static var caseDisplayRepresentations: [ServiceChoice: DisplayRepresentation] = [
+        .followApp: "Default (app setting)",
+        .codex: "Codex",
+        .claude: "Claude",
+        .gemini: "Gemini",
+        .codexClaude: "Codex & Claude",
+        .codexGemini: "Codex & Gemini",
+        .claudeGemini: "Claude & Gemini",
+    ]
+
+    /// 解析为要显示的服务；followApp 时回落到 App 全局设置（快照里的 shown）
+    func resolved(appDefault: [Service]) -> [Service] {
+        switch self {
+        case .followApp:    return appDefault
+        case .codex:        return [.codex]
+        case .claude:       return [.claude]
+        case .gemini:       return [.gemini]
+        case .codexClaude:  return [.codex, .claude]
+        case .codexGemini:  return [.codex, .gemini]
+        case .claudeGemini: return [.claude, .gemini]
+        }
+    }
+}
+
+struct SelectServicesIntent: WidgetConfigurationIntent {
+    static var title: LocalizedStringResource = "Quotient"
+    static var description = IntentDescription("Choose which services this widget shows.")
+
+    @Parameter(title: "Services", default: .followApp)
+    var services: ServiceChoice
 }
 
 // MARK: - Timeline
@@ -24,34 +65,40 @@ struct QuotientWidget: Widget {
 struct QuotaEntry: TimelineEntry {
     let date: Date
     let snapshot: QuotaSnapshot?
+    let shown: [Service]
 }
 
-struct Provider: TimelineProvider {
+struct Provider: AppIntentTimelineProvider {
+    typealias Entry = QuotaEntry
+    typealias Intent = SelectServicesIntent
+
     func placeholder(in context: Context) -> QuotaEntry {
-        QuotaEntry(date: Date(), snapshot: .sample)
+        QuotaEntry(date: Date(), snapshot: .sample, shown: [.codex, .claude])
     }
 
-    func getSnapshot(in context: Context, completion: @escaping (QuotaEntry) -> Void) {
+    func snapshot(for intent: SelectServicesIntent, in context: Context) async -> QuotaEntry {
         let snap = context.isPreview ? .sample : (QuotaSnapshot.load() ?? .sample)
-        completion(QuotaEntry(date: Date(), snapshot: snap))
+        return QuotaEntry(date: Date(), snapshot: snap,
+                          shown: intent.services.resolved(appDefault: snap.shown))
     }
 
-    func getTimeline(in context: Context, completion: @escaping (Timeline<QuotaEntry>) -> Void) {
+    func timeline(for intent: SelectServicesIntent, in context: Context) async -> Timeline<QuotaEntry> {
         let snap = QuotaSnapshot.load()
         let now = Date()
+        let shown = intent.services.resolved(appDefault: snap?.shown ?? [.codex, .claude])
 
         // 在每个即将到来的重置时间点放一个条目，让 LED 到点自动变绿
         var dates: [Date] = [now]
         if let snap {
-            let resets = (snap.codex.windows + snap.claude.windows)
+            let resets = shown.flatMap { snap.snapshot(for: $0).windows }
                 .compactMap(\.resetsAt)
                 .filter { $0 > now && $0.timeIntervalSince(now) < 86400 }
             dates.append(contentsOf: resets.map { $0.addingTimeInterval(5) })
         }
         dates.sort()
 
-        let entries = dates.prefix(8).map { QuotaEntry(date: $0, snapshot: snap) }
-        completion(Timeline(entries: entries, policy: .after(now.addingTimeInterval(15 * 60))))
+        let entries = dates.prefix(8).map { QuotaEntry(date: $0, snapshot: snap, shown: shown) }
+        return Timeline(entries: entries, policy: .after(now.addingTimeInterval(15 * 60)))
     }
 }
 
@@ -75,7 +122,7 @@ struct QuotaWidgetView: View {
                 switch family {
                 case .systemMedium:
                     HStack(alignment: .top, spacing: 14) {
-                        ForEach(Array(snap.shown.enumerated()), id: \.element) { index, service in
+                        ForEach(Array(entry.shown.enumerated()), id: \.element) { index, service in
                             if index > 0 {
                                 Divider().opacity(0.4)
                             }
@@ -86,7 +133,8 @@ struct QuotaWidgetView: View {
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 default:
-                    SmallView(snapshot: snap, now: entry.date, lang: lang, mono: mono)
+                    SmallView(snapshot: snap, shown: entry.shown,
+                              now: entry.date, lang: lang, mono: mono)
                 }
             } else {
                 Text(L10n.t("widget_no_data", lang))
@@ -102,6 +150,7 @@ struct QuotaWidgetView: View {
 /// 小尺寸：每个服务一行，最差窗口的灯 + 剩余百分比
 private struct SmallView: View {
     let snapshot: QuotaSnapshot
+    let shown: [Service]
     let now: Date
     let lang: Lang
     let mono: Bool
@@ -114,7 +163,7 @@ private struct SmallView: View {
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
             }
-            ForEach(snapshot.shown, id: \.self) { service in
+            ForEach(shown, id: \.self) { service in
                 ServiceLine(name: service.displayName,
                             service: snapshot.snapshot(for: service), now: now, lang: lang, mono: mono)
             }
@@ -124,7 +173,7 @@ private struct SmallView: View {
     }
 
     private var overallLed: Led {
-        Led.worst(snapshot.shown.map { snapshot.snapshot(for: $0).asServiceData.led(now: now) })
+        Led.worst(shown.map { snapshot.snapshot(for: $0).asServiceData.led(now: now) })
     }
 }
 
