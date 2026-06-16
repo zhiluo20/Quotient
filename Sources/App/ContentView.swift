@@ -6,22 +6,20 @@ struct ContentView: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
-            if store.services.showCodex {
-                ServiceColumnView(name: "Codex", service: store.codex.snapshot,
-                                  now: store.now, lang: store.lang)
-            }
-            if store.services == .both {
-                Divider().opacity(0.25)
-            }
-            if store.services.showClaude {
-                ServiceColumnView(name: "Claude", service: store.claude.snapshot,
+            let shown = store.services.shown
+            ForEach(Array(shown.enumerated()), id: \.element) { index, service in
+                if index > 0 {
+                    Divider().opacity(0.25)
+                }
+                ServiceColumnView(name: service.displayName,
+                                  service: store.data(for: service).snapshot,
                                   now: store.now, lang: store.lang)
             }
         }
         .padding(.horizontal, 16)
         .padding(.top, 16)
         .padding(.bottom, 14)
-        .frame(width: store.services == .both ? 384 : 208, alignment: .topLeading)
+        .frame(width: store.services.shown.count > 1 ? 384 : 208, alignment: .topLeading)
         .background(GlassBackground())
         .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
         .overlay(

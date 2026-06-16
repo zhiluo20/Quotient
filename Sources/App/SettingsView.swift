@@ -6,9 +6,9 @@ struct SettingsView: View {
     var body: some View {
         Form {
             Picker(L10n.t("services_label", store.lang), selection: $store.services) {
-                Text(L10n.t("services_both", store.lang)).tag(ServiceFilter.both)
-                Text(L10n.t("services_codex", store.lang)).tag(ServiceFilter.codex)
-                Text(L10n.t("services_claude", store.lang)).tag(ServiceFilter.claude)
+                ForEach(ServiceFilter.allCases, id: \.self) { filter in
+                    Text(L10n.t(filter.labelKey, store.lang)).tag(filter)
+                }
             }
             Picker(L10n.t("language_label", store.lang), selection: $store.langPref) {
                 Text(L10n.t("lang_system", store.lang)).tag(LangPref.system)

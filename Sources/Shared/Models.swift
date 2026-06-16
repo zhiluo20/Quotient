@@ -58,10 +58,24 @@ enum ServiceData {
     case loading
     case unavailable(messageKey: String)
     case ready(plan: String?, windows: [WindowQuota], asOf: Date?)
+    /// 无百分比额度、仅有登录/可用状态的服务（如 Gemini）
+    case status(led: Led, textKey: String, asOf: Date?)
 
     var windows: [WindowQuota] {
         if case .ready(_, let w, _) = self { return w }
         return []
+    }
+
+    /// 参与全局信号灯计算的灯色
+    func led(now: Date) -> Led {
+        switch self {
+        case .ready(_, let w, _):
+            return Led.worst(w.map { Led.from(remaining: $0.effectiveRemaining(now: now)) })
+        case .status(let led, _, _):
+            return led
+        default:
+            return .gray
+        }
     }
 }
 
@@ -78,9 +92,46 @@ enum LangPref: String, CaseIterable {
     }
 }
 
-enum ServiceFilter: String, CaseIterable {
-    case both, codex, claude
+enum Service: String, Codable, CaseIterable {
+    case codex, claude, gemini
 
-    var showCodex: Bool { self != .claude }
-    var showClaude: Bool { self != .codex }
+    var displayName: String {
+        switch self {
+        case .codex:  return "Codex"
+        case .claude: return "Claude"
+        case .gemini: return "Gemini"
+        }
+    }
+}
+
+/// 显示哪些服务——最多两个：单选 3 种 + 双选 3 种
+enum ServiceFilter: String, CaseIterable {
+    case codex, claude, gemini
+    case codexClaude, codexGemini, claudeGemini
+
+    /// 按固定顺序（codex→claude→gemini）返回要显示的服务
+    var shown: [Service] {
+        switch self {
+        case .codex:        return [.codex]
+        case .claude:       return [.claude]
+        case .gemini:       return [.gemini]
+        case .codexClaude:  return [.codex, .claude]
+        case .codexGemini:  return [.codex, .gemini]
+        case .claudeGemini: return [.claude, .gemini]
+        }
+    }
+
+    func shows(_ service: Service) -> Bool { shown.contains(service) }
+
+    /// 对应的本地化标签键
+    var labelKey: String {
+        switch self {
+        case .codex:        return "services_codex"
+        case .claude:       return "services_claude"
+        case .gemini:       return "services_gemini"
+        case .codexClaude:  return "services_codex_claude"
+        case .codexGemini:  return "services_codex_gemini"
+        case .claudeGemini: return "services_claude_gemini"
+        }
+    }
 }

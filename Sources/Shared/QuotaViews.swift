@@ -89,7 +89,14 @@ struct ServiceColumnView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            if let key = service.messageKey {
+            if let statusKey = service.statusKey {
+                HStack(spacing: 6) {
+                    LedDot(led: Led(rawValue: service.statusLed) ?? .green, size: 8, mono: mono)
+                    Text(L10n.t(statusKey, lang))
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.primary.opacity(0.8))
+                }
+            } else if let key = service.messageKey {
                 HStack(spacing: 6) {
                     LedDot(led: .gray, size: 7, mono: mono)
                     Text(L10n.t(key, lang))

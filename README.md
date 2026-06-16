@@ -1,6 +1,6 @@
 # Quotient
 
-macOS 桌面小组件，用红 / 黄 / 绿 LED 实时显示本机 **Codex** 和 **Claude Code** 的剩余额度，不用打开命令行就能一眼看到额度状态。
+macOS 桌面小组件，用红 / 黄 / 绿 LED 实时显示本机 **Codex**、**Claude Code** 和 **Gemini** 的状态，不用打开命令行就能一眼看到额度。同屏最多显示两个服务，可在设置里自由组合。
 
 ## 截图
 
@@ -26,12 +26,13 @@ macOS 桌面小组件，用红 / 黄 / 绿 LED 实时显示本机 **Codex** 和 
 - 🪟 **液态玻璃悬浮窗**：macOS 26 原生 Liquid Glass（`glassEffect`）材质，与系统组件一致的双栏布局与圆角，可拖动、位置自动记忆。
 - 📌 **置顶 / 隐藏**：图钉按钮切换置顶；➖ 按钮隐藏悬浮窗，从菜单栏 LED 圆点菜单随时恢复（圆点颜色即总体额度状态）。
 - ⚙️ **标准菜单与设置**：菜单栏菜单含「关于 Quotient」（标准 About 面板：版本号、作者 Zhi Luo、由 Claude Code 协助完成）与「设置…」。设置项：
-  - **显示服务**：Codex 和 Claude / 仅 Codex / 仅 Claude，同时作用于悬浮窗和桌面小组件；
+  - **显示服务**（最多两个）：仅 Codex / 仅 Claude / 仅 Gemini，或 Codex+Claude / Codex+Gemini / Claude+Gemini，同时作用于悬浮窗和桌面小组件；
   - **语言**：跟随系统（默认）/ 简体中文 / English。
-- 🔄 **自动刷新**：Codex 每分钟读取本地数据，Claude 每 5 分钟请求一次；到额度重置时间点自动再刷新，已过重置时间的窗口直接显示为 100%。
+- 🔄 **自动刷新**：Codex / Gemini 每分钟读取本地数据，Claude 每 5 分钟请求一次；到额度重置时间点自动再刷新，已过重置时间的窗口直接显示为 100%。Claude access token 过期时用本地 refreshToken 静默续期（无需重新 `/login`）；断网时保留上次结果并标注数据时间。
 - 🔐 **隐私友好**：
-  - Codex 额度来自本地 `~/.codex/sessions/**/rollout-*.jsonl` 里 CLI 自己记录的 `rate_limits` 快照，**完全离线**，不读取 `auth.json`。
-  - Claude 额度使用 Claude Code 已有的登录态（钥匙串 `Claude Code-credentials` 或 `~/.claude/.credentials.json`），只调用 Anthropic 官方 `api.anthropic.com/api/oauth/usage` 接口；Token 仅在内存中用于这一个请求，不保存、不展示、不发往任何第三方。
+  - **Codex** 额度来自本地 `~/.codex/sessions/**/rollout-*.jsonl` 里 CLI 自己记录的 `rate_limits` 快照，**完全离线**，不读取 `auth.json`。
+  - **Claude** 额度使用 Claude Code 已有的登录态（钥匙串 `Claude Code-credentials` 或 `~/.claude/.credentials.json`），只调用 Anthropic 官方 `api.anthropic.com/api/oauth/usage` 接口；token 仅在内存中用于请求与续期，续期后写回原存储位置与 Claude Code 同步，不保存到别处、不展示、不发往任何第三方。
+  - **Gemini** 只读本地 `~/.gemini/oauth_creds.json` 判断登录状态（绿=已登录、灰=未登录），**完全离线**。注：Gemini（个人 OAuth 免费层）不提供剩余额度百分比——本地无用量记录，官方也无可提前查询余量的接口，配额数字只在超额报错时才返回——所以 Gemini 一格显示的是登录状态而非百分比。
 
 ## 两种显示形态
 
@@ -66,7 +67,7 @@ open dist/Quotient.app
 
 ```
 Sources/
-  Shared/   数据模型、双语文案、Codex/Claude 读取器、共享渲染视图、快照
+  Shared/   数据模型、双语文案、Codex/Claude/Gemini 读取器、共享渲染视图、快照
   App/      悬浮窗宿主（NSPanel + 菜单栏菜单 + 设置窗口 + 刷新调度）
   Widget/   WidgetKit 扩展（TimelineProvider + 小/中尺寸视图）
 Scripts/    图标生成脚本

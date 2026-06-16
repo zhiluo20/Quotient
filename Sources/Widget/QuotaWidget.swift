@@ -75,15 +75,12 @@ struct QuotaWidgetView: View {
                 switch family {
                 case .systemMedium:
                     HStack(alignment: .top, spacing: 14) {
-                        if snap.showCodex {
-                            ServiceColumnView(name: "Codex", service: snap.codex,
-                                              now: entry.date, lang: lang, mono: mono)
-                        }
-                        if snap.showCodex && snap.showClaude {
-                            Divider().opacity(0.4)
-                        }
-                        if snap.showClaude {
-                            ServiceColumnView(name: "Claude", service: snap.claude,
+                        ForEach(Array(snap.shown.enumerated()), id: \.element) { index, service in
+                            if index > 0 {
+                                Divider().opacity(0.4)
+                            }
+                            ServiceColumnView(name: service.displayName,
+                                              service: snap.snapshot(for: service),
                                               now: entry.date, lang: lang, mono: mono)
                         }
                     }
@@ -117,11 +114,9 @@ private struct SmallView: View {
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
                     .foregroundStyle(.secondary)
             }
-            if snapshot.showCodex {
-                ServiceLine(name: "Codex", service: snapshot.codex, now: now, mono: mono)
-            }
-            if snapshot.showClaude {
-                ServiceLine(name: "Claude", service: snapshot.claude, now: now, mono: mono)
+            ForEach(snapshot.shown, id: \.self) { service in
+                ServiceLine(name: service.displayName,
+                            service: snapshot.snapshot(for: service), now: now, lang: lang, mono: mono)
             }
             Spacer(minLength: 0)
         }
@@ -129,12 +124,7 @@ private struct SmallView: View {
     }
 
     private var overallLed: Led {
-        var windows: [WindowQuota] = []
-        if snapshot.showCodex { windows += snapshot.codex.windows }
-        if snapshot.showClaude { windows += snapshot.claude.windows }
-        return Led.worst(windows.map {
-            Led.from(remaining: $0.effectiveRemaining(now: now))
-        })
+        Led.worst(snapshot.shown.map { snapshot.snapshot(for: $0).asServiceData.led(now: now) })
     }
 }
 
@@ -142,6 +132,7 @@ private struct ServiceLine: View {
     let name: String
     let service: ServiceSnapshot
     let now: Date
+    let lang: Lang
     let mono: Bool
 
     var body: some View {
@@ -151,7 +142,11 @@ private struct ServiceLine: View {
                 Text(name)
                     .font(.system(size: 13, weight: .semibold, design: .rounded))
                 Spacer()
-                if let worst {
+                if let statusKey = service.statusKey {
+                    Text(L10n.t(statusKey, lang))
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.secondary)
+                } else if let worst {
                     Text("\(Int(worst.rounded()))%")
                         .font(.system(size: 14, weight: .bold, design: .rounded))
                         .monospacedDigit()
@@ -160,7 +155,7 @@ private struct ServiceLine: View {
                     Text("—").foregroundStyle(.tertiary)
                 }
             }
-            if let worst {
+            if service.statusKey == nil, let worst {
                 QuotaBar(remaining: worst, led: led, mono: mono)
             }
         }
@@ -171,7 +166,10 @@ private struct ServiceLine: View {
     }
 
     private var led: Led {
-        guard let worst else { return .gray }
+        if let statusKey = service.statusKey, !statusKey.isEmpty {
+            return Led(rawValue: service.statusLed) ?? .green
+        }
+        guard let worst else { return service.messageKey != nil ? .gray : .gray }
         return Led.from(remaining: worst)
     }
 }

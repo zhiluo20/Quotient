@@ -6,6 +6,7 @@ import WidgetKit
 final class UsageStore: ObservableObject {
     @Published var codex: ServiceData = .loading
     @Published var claude: ServiceData = .loading
+    @Published var gemini: ServiceData = .loading
     @Published var now = Date()
 
     @Published var langPref: LangPref {
@@ -48,7 +49,7 @@ final class UsageStore: ObservableObject {
     init() {
         let defaults = UserDefaults.standard
         langPref = LangPref(rawValue: defaults.string(forKey: "langPref") ?? "") ?? .system
-        services = ServiceFilter(rawValue: defaults.string(forKey: "services") ?? "") ?? .both
+        services = ServiceFilter(rawValue: defaults.string(forKey: "services") ?? "") ?? .codexClaude
         pinned = defaults.object(forKey: "pinned") as? Bool ?? true
         hidden = defaults.bool(forKey: "hidden")
 
@@ -56,6 +57,16 @@ final class UsageStore: ObservableObject {
         if let cached = QuotaSnapshot.load() {
             codex = cached.codex.asServiceData
             claude = cached.claude.asServiceData
+            gemini = cached.gemini.asServiceData
+        }
+    }
+
+    /// 按服务取当前运行时数据
+    func data(for service: Service) -> ServiceData {
+        switch service {
+        case .codex:  return codex
+        case .claude: return claude
+        case .gemini: return gemini
         }
     }
 
@@ -73,6 +84,7 @@ final class UsageStore: ObservableObject {
     func refresh(force: Bool) {
         now = Date()
         codex = CodexReader.read()
+        gemini = GeminiReader.read()
 
         // Claude 走网络，5 分钟一次足够；手动刷新与重置触发时强制
         if force || now.timeIntervalSince(lastClaudeFetch) > 300 {
@@ -109,10 +121,10 @@ final class UsageStore: ObservableObject {
         QuotaSnapshot(
             codex: codex.snapshot,
             claude: claude.snapshot,
+            gemini: gemini.snapshot,
             lang: lang.rawValue,
             generatedAt: Date(),
-            showCodex: services.showCodex,
-            showClaude: services.showClaude
+            shown: services.shown
         ).save()
         WidgetCenter.shared.reloadAllTimelines()
         onLedChange?(overallLed)
@@ -135,15 +147,6 @@ final class UsageStore: ObservableObject {
     }
 
     var overallLed: Led {
-        var shown: [ServiceData] = []
-        if services.showCodex { shown.append(codex) }
-        if services.showClaude { shown.append(claude) }
-        var leds: [Led] = []
-        for service in shown {
-            leds.append(contentsOf: service.windows.map {
-                Led.from(remaining: $0.effectiveRemaining(now: now))
-            })
-        }
-        return Led.worst(leds)
+        Led.worst(services.shown.map { data(for: $0).led(now: now) })
     }
 }
