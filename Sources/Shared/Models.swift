@@ -41,6 +41,8 @@ struct WindowQuota: Identifiable, Codable {
     /// 已用百分比 0–100
     let usedPercent: Double
     let resetsAt: Date?
+    /// 自定义标签（如 Gemini 的 "Pro" / "Flash"），优先于按分钟数生成的标签
+    var customLabel: String? = nil
 
     /// 渲染时按当前时间计算的剩余百分比：重置时间已过则视为已重置（100% 剩余）
     func effectiveRemaining(now: Date) -> Double {

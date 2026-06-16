@@ -44,7 +44,7 @@ final class UsageStore: ObservableObject {
 
     private var timer: Timer?
     private var resetTimer: Timer?
-    private var lastClaudeFetch: Date = .distantPast
+    private var lastNetFetch: Date = .distantPast
 
     init() {
         let defaults = UserDefaults.standard
@@ -84,14 +84,19 @@ final class UsageStore: ObservableObject {
     func refresh(force: Bool) {
         now = Date()
         codex = CodexReader.read()
-        gemini = GeminiReader.read()
 
-        // Claude 走网络，5 分钟一次足够；手动刷新与重置触发时强制
-        if force || now.timeIntervalSince(lastClaudeFetch) > 300 {
-            lastClaudeFetch = now
+        // Claude / Gemini 走网络，5 分钟一次足够；手动刷新与重置触发时强制
+        if force || now.timeIntervalSince(lastNetFetch) > 300 {
+            lastNetFetch = now
             Task {
                 let result = await ClaudeReader.read()
-                self.applyClaude(result)
+                self.apply(result, to: \.claude, transientPrefix: "claude")
+                self.scheduleResetRefresh()
+                self.persistSnapshot()
+            }
+            Task {
+                let result = await GeminiReader.read()
+                self.apply(result, to: \.gemini, transientPrefix: "gemini")
                 self.scheduleResetRefresh()
                 self.persistSnapshot()
             }
@@ -101,19 +106,20 @@ final class UsageStore: ObservableObject {
         persistSnapshot()
     }
 
-    /// 应用 Claude 拉取结果：网络类失败（断网/接口错误）时保留上次成功数据，
+    /// 应用网络服务的拉取结果：断网/接口错误时保留上次成功数据，
     /// 只有需要用户介入的状态（未登录/续期失败）才覆盖显示。
-    private func applyClaude(_ result: ServiceData) {
+    private func apply(_ result: ServiceData, to keyPath: ReferenceWritableKeyPath<UsageStore, ServiceData>,
+                       transientPrefix: String) {
         if result.isReady {
-            claude = result
+            self[keyPath: keyPath] = result
             return
         }
         if case .unavailable(let key) = result,
-           key == "claude_offline" || key == "claude_error",
-           claude.isReady {
+           key == "\(transientPrefix)_offline" || key == "\(transientPrefix)_error",
+           self[keyPath: keyPath].isReady {
             return  // 保留旧值，UI 用 asOf 提示数据时间
         }
-        claude = result
+        self[keyPath: keyPath] = result
     }
 
     /// 把当前额度写入 App Group 共享容器，并通知系统刷新桌面小组件
@@ -133,7 +139,7 @@ final class UsageStore: ObservableObject {
     /// 在最近的额度重置时间点之后再刷新一次
     private func scheduleResetRefresh() {
         resetTimer?.invalidate()
-        let upcoming = (codex.windows + claude.windows)
+        let upcoming = (codex.windows + claude.windows + gemini.windows)
             .compactMap(\.resetsAt)
             .filter { $0 > now }
             .min()

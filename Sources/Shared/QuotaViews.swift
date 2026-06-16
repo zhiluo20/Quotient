@@ -49,7 +49,7 @@ struct WindowRowView: View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 6) {
                 LedDot(led: led, size: 7, mono: mono)
-                Text(L10n.windowLabel(minutes: window.windowMinutes,
+                Text(window.customLabel ?? L10n.windowLabel(minutes: window.windowMinutes,
                                       extraKey: window.labelKey, lang: lang))
                     .font(.system(size: 11, weight: .medium, design: .rounded))
                     .foregroundStyle(.secondary)
