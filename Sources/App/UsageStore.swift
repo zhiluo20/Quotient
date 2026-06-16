@@ -51,6 +51,12 @@ final class UsageStore: ObservableObject {
         services = ServiceFilter(rawValue: defaults.string(forKey: "services") ?? "") ?? .both
         pinned = defaults.object(forKey: "pinned") as? Bool ?? true
         hidden = defaults.bool(forKey: "hidden")
+
+        // 冷启动先用磁盘上的上次结果填充，避免空窗/闪烁，断网时也有内容可看
+        if let cached = QuotaSnapshot.load() {
+            codex = cached.codex.asServiceData
+            claude = cached.claude.asServiceData
+        }
     }
 
     func start() {
@@ -73,7 +79,7 @@ final class UsageStore: ObservableObject {
             lastClaudeFetch = now
             Task {
                 let result = await ClaudeReader.read()
-                self.claude = result
+                self.applyClaude(result)
                 self.scheduleResetRefresh()
                 self.persistSnapshot()
             }
@@ -81,6 +87,21 @@ final class UsageStore: ObservableObject {
             scheduleResetRefresh()
         }
         persistSnapshot()
+    }
+
+    /// 应用 Claude 拉取结果：网络类失败（断网/接口错误）时保留上次成功数据，
+    /// 只有需要用户介入的状态（未登录/续期失败）才覆盖显示。
+    private func applyClaude(_ result: ServiceData) {
+        if result.isReady {
+            claude = result
+            return
+        }
+        if case .unavailable(let key) = result,
+           key == "claude_offline" || key == "claude_error",
+           claude.isReady {
+            return  // 保留旧值，UI 用 asOf 提示数据时间
+        }
+        claude = result
     }
 
     /// 把当前额度写入 App Group 共享容器，并通知系统刷新桌面小组件

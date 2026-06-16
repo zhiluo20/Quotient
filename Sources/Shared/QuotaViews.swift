@@ -100,6 +100,11 @@ struct ServiceColumnView: View {
                 ForEach(service.windows) { window in
                     WindowRowView(window: window, now: now, lang: lang, mono: mono)
                 }
+                if let asOf = service.asOf, now.timeIntervalSince(asOf) > 360 {
+                    Text("\(L10n.t("as_of", lang)) \(asOf.formatted(date: .omitted, time: .shortened))")
+                        .font(.system(size: 8))
+                        .foregroundStyle(.tertiary)
+                }
             }
             Spacer(minLength: 0)
         }

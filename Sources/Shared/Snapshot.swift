@@ -65,7 +65,20 @@ struct QuotaSnapshot: Codable {
     }
 }
 
+extension ServiceSnapshot {
+    /// 从磁盘缓存还原为运行时状态：有窗口数据就当作上次成功结果
+    var asServiceData: ServiceData {
+        if !windows.isEmpty {
+            return .ready(plan: plan, windows: windows, asOf: asOf)
+        }
+        if let messageKey { return .unavailable(messageKey: messageKey) }
+        return .loading
+    }
+}
+
 extension ServiceData {
+    var isReady: Bool { if case .ready = self { return true }; return false }
+
     var snapshot: ServiceSnapshot {
         switch self {
         case .loading:
