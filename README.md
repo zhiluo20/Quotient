@@ -45,19 +45,28 @@ In the desktop **monochrome (frosted) mode**, bars automatically switch to an op
 
 The host app fetches all data and writes it to an App Group container (`snapshot.json` — percentages and reset times only, never any credentials), then asks the system to reload the widget. While the host app runs, the widget is near-real-time; after the host quits, the widget refreshes on the system budget (~15 min) and turns green automatically at reset times. Adding the host app as a login item is recommended.
 
-## Build & release
+## Install (from a release)
+
+1. Download `Quotient-x.y.z.dmg` from [Releases](https://github.com/zhiluo20/Quotient/releases).
+2. Open the DMG and drag **Quotient** into **Applications**.
+3. **First launch only:** right-click `Quotient.app` → **Open** → **Open** in the dialog. (Or, if macOS blocked it, go to **System Settings → Privacy & Security**, scroll down, and click **Open Anyway**.)
+
+This one-time step is needed because the app is **not notarized** (see below) — after the first open, it launches normally like any other app.
+
+> Why the right-click? The app is signed only for development, not with a paid Developer ID + Apple notarization, so Gatekeeper asks you to confirm it once. This is normal for open-source apps distributed outside the App Store. Public "double-click just works" distribution would require a paid Apple Developer account ($99/yr): a `Developer ID Application` certificate plus `xcrun notarytool` notarization. This is **not** the same as the App Store — the DMG itself never goes through App Store review.
+
+## Build
 
 Requires macOS 15+, Xcode, XcodeGen (`brew install xcodegen`), and an Apple Development signing certificate (the widget extension must be genuinely signed; the Team ID goes in `project.yml` and the App Group ID in `Snapshot.swift` — note the Team ID is the certificate's OU field, not the name in parentheses; replace it with your own Team ID when cloning). Liquid Glass requires macOS 26.
 
 ```sh
-./build.sh                # builds dist/Quotient.app and packages dist/Quotient-1.0.0.zip
+./build.sh                # builds dist/Quotient.app and packages dist/Quotient-x.y.z.zip
+./Scripts/make_dmg.sh     # packages dist/Quotient-x.y.z.dmg (drag-to-Applications)
 ./Scripts/make_icon.sh    # (optional) regenerate Resources/AppIcon.icns
 open dist/Quotient.app
 ```
 
 The app runs without a Dock icon (a menu-bar LED menu is provided); quit from the menu or the panel's ✕. The widget is registered in the gallery only after the first launch.
-
-> Distribution note: it is currently signed with an Apple Development certificate, so it runs only on the developer's own/registered devices. Public distribution requires a paid developer account's Developer ID certificate plus notarization — change `CODE_SIGN_IDENTITY` in `project.yml` to `Developer ID Application` and run `xcrun notarytool`.
 
 ## Acknowledgements
 

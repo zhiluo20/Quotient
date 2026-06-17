@@ -45,19 +45,28 @@ macOS 桌面小组件，用红 / 黄 / 绿 LED 实时显示本机 **Codex**、**
 
 数据由宿主 App 统一获取，写入 App Group 共享容器（`snapshot.json`，只含百分比与重置时间，不含任何凭据），随后通知系统刷新小组件。宿主 App 在运行时小组件近实时；宿主退出后按系统预算（约 15 分钟）自行刷新，并在重置时间点自动翻绿。建议把宿主 App 设为登录项。
 
-## 构建与发布
+## 安装（从 Release 下载）
+
+1. 到 [Releases](https://github.com/zhiluo20/Quotient/releases) 下载 `Quotient-x.y.z.dmg`。
+2. 打开 DMG，把 **Quotient** 拖进 **Applications**。
+3. **仅首次需要：** 右键 `Quotient.app` →「**打开**」→ 弹窗里再点「**打开**」。（若被系统拦下，去「**系统设置 → 隐私与安全性**」往下翻，点「**仍要打开**」。）
+
+之所以要这一步，是因为这个 app **未公证**（说明见下）——首次放行后，以后就和普通 app 一样双击即开。
+
+> 为什么要右键？这个 app 只用开发证书签名，没有付费 Developer ID + Apple 公证，所以 Gatekeeper 让你手动确认一次。开源软件在 App Store 之外分发时这很常见。要做到「双击即开、零警告」需要付费 Apple 开发者账号（99 美元/年）：用 `Developer ID Application` 证书 + `xcrun notarytool` 公证。这和 App Store **不是一回事**——DMG 本身不经过 App Store 审核。
+
+## 构建
 
 需要 macOS 15+、Xcode、XcodeGen（`brew install xcodegen`）以及一张 Apple Development 签名证书（Widget 扩展必须真实签名；Team ID 写在 `project.yml` 与 `Snapshot.swift` 的 App Group ID 中，注意 Team ID 是证书 OU 字段，不是证书名称括号里的串；克隆构建时请替换为你自己的 Team ID）。Liquid Glass 效果需要 macOS 26。
 
 ```sh
-./build.sh                # 构建 dist/Quotient.app 并打包 dist/Quotient-1.0.0.zip
+./build.sh                # 构建 dist/Quotient.app 并打包 dist/Quotient-x.y.z.zip
+./Scripts/make_dmg.sh     # 打包 dist/Quotient-x.y.z.dmg（拖到 Applications）
 ./Scripts/make_icon.sh    # （可选）重新生成 Resources/AppIcon.icns
 open dist/Quotient.app
 ```
 
 应用以无 Dock 图标形态运行（菜单栏有 LED 圆点菜单），退出走菜单或悬浮窗 ✕。首次启动后系统才会把小组件登记进组件画廊。
-
-> 分发说明：当前用 Apple Development 证书签名，仅限本机/同开发者设备运行。要公开分发需要付费开发者账号的 Developer ID 证书 + 公证（notarization），把 `project.yml` 里的 `CODE_SIGN_IDENTITY` 换成 `Developer ID Application` 并执行 `xcrun notarytool` 即可。
 
 ## 致谢
 
