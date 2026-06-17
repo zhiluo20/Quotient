@@ -11,7 +11,9 @@ struct QuotientWidgetBundle: WidgetBundle {
 
 struct QuotientWidget: Widget {
     var body: some WidgetConfiguration {
-        AppIntentConfiguration(kind: "Quotient",
+        // kind 用新字符串：原 "Quotient" 最初以静态组件注册，WidgetKit 会把
+        // 该 kind 缓存为「不可配置」，同名改成可配置后系统不刷新。换新 kind 绕过缓存。
+        AppIntentConfiguration(kind: "QuotientServices",
                                intent: SelectServicesIntent.self,
                                provider: Provider()) { entry in
             QuotaWidgetView(entry: entry)
