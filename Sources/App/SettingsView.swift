@@ -5,9 +5,20 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Picker(L10n.t("services_label", store.lang), selection: $store.services) {
-                ForEach(ServiceFilter.allCases, id: \.self) { filter in
-                    Text(L10n.t(filter.labelKey, store.lang)).tag(filter)
+            Section {
+                Picker(L10n.t("service_primary_label", store.lang),
+                       selection: $store.primaryService) {
+                    ForEach(Service.allCases, id: \.self) { service in
+                        Text(service.displayName).tag(service)
+                    }
+                }
+                Picker(L10n.t("service_secondary_label", store.lang),
+                       selection: $store.secondaryService) {
+                    ForEach(ServiceSlot.allCases, id: \.self) { slot in
+                        Text(slot.service?.displayName ?? L10n.t(slot.labelKey, store.lang))
+                            .tag(slot)
+                            .disabled(slot.service == store.primaryService)
+                    }
                 }
             }
             Picker(L10n.t("language_label", store.lang), selection: $store.langPref) {
@@ -17,7 +28,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 360)
+        .frame(width: 400)
         .fixedSize(horizontal: false, vertical: true)
     }
 }

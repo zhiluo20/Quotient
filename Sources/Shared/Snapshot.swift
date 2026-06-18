@@ -17,6 +17,7 @@ struct QuotaSnapshot: Codable {
     var codex: ServiceSnapshot
     var claude: ServiceSnapshot
     var gemini: ServiceSnapshot
+    var zcode: ServiceSnapshot
     var lang: String
     var generatedAt: Date
     /// 当前显示哪些服务（最多两个）
@@ -34,8 +35,25 @@ struct QuotaSnapshot: Codable {
         switch service {
         case .codex:  return codex
         case .claude: return claude
-        case .gemini: return gemini
+        case .gemini: return gemini.limitedWindows(2)
+        case .zcode:  return zcode
         }
+    }
+
+    init(codex: ServiceSnapshot, claude: ServiceSnapshot, gemini: ServiceSnapshot,
+         zcode: ServiceSnapshot = Self.missingZCode, lang: String, generatedAt: Date,
+         shown: [Service] = [.codex, .claude]) {
+        self.codex = codex
+        self.claude = claude
+        self.gemini = gemini
+        self.zcode = zcode
+        self.lang = lang
+        self.generatedAt = generatedAt
+        self.shown = shown
+    }
+
+    private static var missingZCode: ServiceSnapshot {
+        ServiceSnapshot(messageKey: "zcode_no_data", plan: nil, asOf: nil, windows: [])
     }
 
     func save() {
@@ -73,13 +91,55 @@ struct QuotaSnapshot: Codable {
             ]),
             gemini: ServiceSnapshot(messageKey: nil, plan: nil, asOf: Date(), windows: [],
                                     statusKey: "status_active", statusLed: "green"),
+            zcode: ServiceSnapshot(messageKey: nil, plan: nil, asOf: Date(), windows: [
+                WindowQuota(id: "zcode_glm_5_2", windowMinutes: nil, labelKey: nil,
+                            usedPercent: 72, resetsAt: Date().addingTimeInterval(3600 * 9),
+                            customLabel: "GLM-5.2"),
+                WindowQuota(id: "zcode_glm_5_turbo", windowMinutes: nil, labelKey: nil,
+                            usedPercent: 18, resetsAt: Date().addingTimeInterval(3600 * 9),
+                            customLabel: "GLM-5-Turbo"),
+            ]),
             lang: "zh",
             generatedAt: Date()
         )
     }
 }
 
+extension QuotaSnapshot {
+    private enum CodingKeys: String, CodingKey {
+        case codex, claude, gemini, zcode, lang, generatedAt, shown
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        codex = try c.decode(ServiceSnapshot.self, forKey: .codex)
+        claude = try c.decode(ServiceSnapshot.self, forKey: .claude)
+        gemini = try c.decode(ServiceSnapshot.self, forKey: .gemini)
+        zcode = try c.decodeIfPresent(ServiceSnapshot.self, forKey: .zcode) ?? Self.missingZCode
+        lang = try c.decode(String.self, forKey: .lang)
+        generatedAt = try c.decode(Date.self, forKey: .generatedAt)
+        shown = try c.decodeIfPresent([Service].self, forKey: .shown) ?? [.codex, .claude]
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(codex, forKey: .codex)
+        try c.encode(claude, forKey: .claude)
+        try c.encode(gemini, forKey: .gemini)
+        try c.encode(zcode, forKey: .zcode)
+        try c.encode(lang, forKey: .lang)
+        try c.encode(generatedAt, forKey: .generatedAt)
+        try c.encode(shown, forKey: .shown)
+    }
+}
+
 extension ServiceSnapshot {
+    func limitedWindows(_ limit: Int) -> ServiceSnapshot {
+        var copy = self
+        copy.windows = Array(copy.windows.prefix(limit))
+        return copy
+    }
+
     /// 从磁盘缓存还原为运行时状态：有窗口数据就当作上次成功结果
     var asServiceData: ServiceData {
         if !windows.isEmpty {

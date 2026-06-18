@@ -2,7 +2,7 @@
 
 [English](README.md) · **简体中文**
 
-macOS 桌面小组件，用红 / 黄 / 绿 LED 实时显示本机 **Codex**、**Claude Code** 和 **Gemini** 的剩余额度，不用打开命令行就能一眼看到。同屏最多显示两个服务，且每个桌面小组件可单独配置——可以摆多个组件，各显示不同内容。
+macOS 桌面小组件，用红 / 黄 / 绿 LED 实时显示本机 **Codex**、**Claude Code**、**Gemini** 和 **ZCode** 的剩余额度，不用打开命令行就能一眼看到。同屏最多显示两个服务，且每个桌面小组件可单独配置——可以摆多个组件，各显示不同内容。
 
 ## 截图
 
@@ -28,20 +28,21 @@ macOS 桌面小组件，用红 / 黄 / 绿 LED 实时显示本机 **Codex**、**
 - 🪟 **液态玻璃悬浮窗**：macOS 26 原生 Liquid Glass（`glassEffect`）材质，与系统组件一致的双栏布局与圆角，可拖动、位置自动记忆。
 - 📌 **置顶 / 隐藏**：图钉按钮切换置顶；➖ 按钮隐藏悬浮窗，从菜单栏 LED 圆点菜单随时恢复（圆点颜色即总体额度状态）。
 - ⚙️ **标准菜单与设置**：菜单栏菜单含「关于 Quotient」（标准 About 面板：版本号、作者 Zhi Luo、由 Claude Code 协助完成）与「设置…」。设置项：
-  - **显示服务**（最多两个）：仅 Codex / 仅 Claude / 仅 Gemini，或 Codex+Claude / Codex+Gemini / Claude+Gemini。这是悬浮窗的设置，同时作为新建小组件的默认值；
+  - **显示服务**（最多两个）：两个供应商下拉框可自由组合 Codex / Claude / Gemini / ZCode，第二栏也可以设为不显示。这是悬浮窗的设置，同时作为新建小组件的默认值；
   - **语言**：跟随系统（默认）/ 简体中文 / English。
-- 🧩 **每个小组件单独配置**：每个桌面小组件可通过原生「编辑小组件」选择自己显示哪些服务（长按 / 右键组件 → 编辑小组件 → Services）。保持「Default (app setting)」即跟随悬浮窗设置，或指定某个服务 / 某个两两组合。可以摆多个组件，各显示不同内容。
-- 🔄 **自动刷新**：Codex 每分钟读取本地数据，Claude / Gemini 每 5 分钟请求一次；到额度重置时间点自动再刷新，已过重置时间的窗口直接显示为 100%。Claude / Gemini 的 access token 过期时用本地 refresh token 静默续期（无需重新登录）；断网时保留上次结果并标注数据时间。
+- 🧩 **每个小组件单独配置**：每个桌面小组件可通过原生「编辑小组件」选择自己显示哪些服务（长按 / 右键组件 → 编辑小组件 → First Provider / Second Provider）。保持 First Provider 为「Default (app setting)」即跟随悬浮窗设置，或指定某个服务 / 某个两两组合。可以摆多个组件，各显示不同内容。
+- 🔄 **自动刷新**：Codex 和 ZCode 每分钟读取本地数据，Claude / Gemini 每 5 分钟请求一次；到额度重置时间点自动再刷新，已过重置时间的窗口直接显示为 100%。Claude / Gemini 的 access token 过期时用本地 refresh token 静默续期（无需重新登录）；断网时保留上次结果并标注数据时间。
 - 🔐 **隐私友好**：
   - **Codex** 额度来自本地 `~/.codex/sessions/**/rollout-*.jsonl` 里 CLI 自己记录的 `rate_limits` 快照，**完全离线**，不读取 `auth.json`。
   - **Claude** 额度使用 Claude Code 已有的登录态（钥匙串 `Claude Code-credentials` 或 `~/.claude/.credentials.json`），调用 Anthropic 官方 `api.anthropic.com/api/oauth/usage` 接口。
-  - **Gemini** 额度复用 Gemini CLI 的登录态（`~/.gemini/oauth_creds.json`），调用 Code Assist 的 `retrieveUserQuota` 接口（与 Gemini CLI `/status` 同源），显示各模型（Pro / Flash / Flash-Lite）剩余比例。
-  - 三者的 token 都只在内存中用于额度请求与续期，续期后写回各自原存储位置与对应 CLI 同步，**不保存到别处、不展示、不发往任何第三方**。
+  - **Gemini** 额度复用 Gemini CLI 的登录态（`~/.gemini/oauth_creds.json`），调用 Code Assist 的 `retrieveUserQuota` 接口（与 Gemini CLI `/status` 同源），按优先级显示前两个模型组（通常是 Pro / Flash）剩余比例。
+  - **ZCode** 额度来自本地 `~/.zcode/v2/logs` 或 `~/.zcode/cli/log` 中 ZCode 自己写下来的 `billing/balance` 快照，显示各权益 / 模型（如 GLM-5.2、GLM-5-Turbo）的剩余 token。
+  - 只有需要实时请求额度的服务（Claude / Gemini）会在内存中使用 token 完成请求与续期，续期后只写回各自原存储位置与对应 CLI 同步，**不保存到别处、不展示、不发往任何第三方**。Codex 与 ZCode 都只解析本地用量日志。
 
 ## 两种显示形态
 
 1. **液态玻璃悬浮窗**（宿主 App 自带）：可置顶、分钟级刷新、悬停浮现控制按钮。
-2. **系统桌面小组件**（WidgetKit 扩展）：右键桌面 →「编辑小组件」→ 搜索 "Quotient"，提供小、中两种尺寸，桌面与通知中心均可放置；每个实例可单独配置（编辑小组件 → Services）。桌面单色（monochrome）渲染模式下进度条自动切换为不透明度对比方案。
+2. **系统桌面小组件**（WidgetKit 扩展）：右键桌面 →「编辑小组件」→ 搜索 "Quotient"，提供小、中两种尺寸，桌面与通知中心均可放置；每个实例可单独配置（编辑小组件 → First Provider / Second Provider）。从旧版本升级后需要删除桌面上已有的 Quotient 小组件再重新添加一次，让 macOS 注册新的两栏配置。桌面单色（monochrome）渲染模式下进度条自动切换为不透明度对比方案。
 
 数据由宿主 App 统一获取，写入 App Group 共享容器（`snapshot.json`，只含百分比与重置时间，不含任何凭据），随后通知系统刷新小组件。宿主 App 在运行时小组件近实时；宿主退出后按系统预算（约 15 分钟）自行刷新，并在重置时间点自动翻绿。建议把宿主 App 设为登录项。
 
@@ -80,7 +81,7 @@ open dist/Quotient.app
 
 ```
 Sources/
-  Shared/   数据模型、双语文案、Codex/Claude/Gemini 读取器、共享渲染视图、快照
+  Shared/   数据模型、双语文案、Codex/Claude/Gemini/ZCode 读取器、共享渲染视图、快照
   App/      悬浮窗宿主（NSPanel + 菜单栏菜单 + 设置窗口 + 刷新调度）
   Widget/   WidgetKit 扩展（AppIntent 配置 + AppIntentTimelineProvider + 小/中尺寸视图）
 Scripts/    图标生成脚本

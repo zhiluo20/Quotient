@@ -11,55 +11,96 @@ struct QuotientWidgetBundle: WidgetBundle {
 
 struct QuotientWidget: Widget {
     var body: some WidgetConfiguration {
-        // kind 用新字符串：原 "Quotient" 最初以静态组件注册，WidgetKit 会把
-        // 该 kind 缓存为「不可配置」，同名改成可配置后系统不刷新。换新 kind 绕过缓存。
-        AppIntentConfiguration(kind: "QuotientServices",
-                               intent: SelectServicesIntent.self,
+        // WidgetKit 会按 kind 缓存 AppIntent 配置 schema。服务选择从旧的
+        // 单下拉改为两栏后必须换 kind，否则系统仍可能沿用旧的 Services 配置。
+        AppIntentConfiguration(kind: "QuotientProviderSlots",
+                               intent: SelectProviderSlotsIntent.self,
                                provider: Provider()) { entry in
             QuotaWidgetView(entry: entry)
         }
         .configurationDisplayName("Quotient")
-        .description("Codex / Claude / Gemini quota at a glance")
+        .description("Codex / Claude / Gemini / ZCode quota at a glance")
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }
 
-// MARK: - 每个 widget 实例可独立配置显示哪些服务（原生编辑小组件）
+// MARK: - 每个 widget 实例可独立配置两个服务槽位（原生编辑小组件）
 
-enum ServiceChoice: String, AppEnum {
-    case followApp, codex, claude, gemini, codexClaude, codexGemini, claudeGemini
+enum FirstProviderChoice: String, AppEnum {
+    case followApp, codex, claude, gemini, zcode
 
-    static var typeDisplayRepresentation: TypeDisplayRepresentation = "Services"
-    static var caseDisplayRepresentations: [ServiceChoice: DisplayRepresentation] = [
+    static var typeDisplayRepresentation: TypeDisplayRepresentation = "First Provider"
+    static var caseDisplayRepresentations: [FirstProviderChoice: DisplayRepresentation] = [
         .followApp: "Default (app setting)",
         .codex: "Codex",
         .claude: "Claude",
         .gemini: "Gemini",
-        .codexClaude: "Codex & Claude",
-        .codexGemini: "Codex & Gemini",
-        .claudeGemini: "Claude & Gemini",
+        .zcode: "ZCode",
     ]
 
-    /// 解析为要显示的服务；followApp 时回落到 App 全局设置（快照里的 shown）
-    func resolved(appDefault: [Service]) -> [Service] {
+    var service: Service? {
         switch self {
-        case .followApp:    return appDefault
-        case .codex:        return [.codex]
-        case .claude:       return [.claude]
-        case .gemini:       return [.gemini]
-        case .codexClaude:  return [.codex, .claude]
-        case .codexGemini:  return [.codex, .gemini]
-        case .claudeGemini: return [.claude, .gemini]
+        case .followApp: return nil
+        case .codex:     return .codex
+        case .claude:    return .claude
+        case .gemini:    return .gemini
+        case .zcode:     return .zcode
         }
     }
 }
 
-struct SelectServicesIntent: WidgetConfigurationIntent {
-    static var title: LocalizedStringResource = "Quotient"
-    static var description = IntentDescription("Choose which services this widget shows.")
+enum SecondProviderChoice: String, AppEnum {
+    case none, codex, claude, gemini, zcode
 
-    @Parameter(title: "Services", default: .followApp)
-    var services: ServiceChoice
+    static var typeDisplayRepresentation: TypeDisplayRepresentation = "Second Provider"
+    static var caseDisplayRepresentations: [SecondProviderChoice: DisplayRepresentation] = [
+        .none: "Hidden",
+        .codex: "Codex",
+        .claude: "Claude",
+        .gemini: "Gemini",
+        .zcode: "ZCode",
+    ]
+
+    var service: Service? {
+        switch self {
+        case .none:   return nil
+        case .codex:  return .codex
+        case .claude: return .claude
+        case .gemini: return .gemini
+        case .zcode:  return .zcode
+        }
+    }
+}
+
+struct SelectProviderSlotsIntent: WidgetConfigurationIntent {
+    static var title: LocalizedStringResource = "Quotient"
+    static var description = IntentDescription("Choose which providers this widget shows.")
+
+    @Parameter(title: "First Provider", default: .followApp)
+    var firstProvider: FirstProviderChoice
+
+    @Parameter(title: "Second Provider", default: SecondProviderChoice.none)
+    var secondProvider: SecondProviderChoice
+
+    func resolved(appDefault: [Service]) -> [Service] {
+        if firstProvider == .followApp, secondProvider == .none {
+            return appDefault
+        }
+
+        var shown: [Service]
+        if let first = firstProvider.service {
+            shown = [first]
+        } else if let appFirst = appDefault.first {
+            shown = [appFirst]
+        } else {
+            shown = [.codex]
+        }
+
+        if let second = secondProvider.service, !shown.contains(second) {
+            shown.append(second)
+        }
+        return Array(shown.prefix(2))
+    }
 }
 
 // MARK: - Timeline
@@ -72,22 +113,22 @@ struct QuotaEntry: TimelineEntry {
 
 struct Provider: AppIntentTimelineProvider {
     typealias Entry = QuotaEntry
-    typealias Intent = SelectServicesIntent
+    typealias Intent = SelectProviderSlotsIntent
 
     func placeholder(in context: Context) -> QuotaEntry {
         QuotaEntry(date: Date(), snapshot: .sample, shown: [.codex, .claude])
     }
 
-    func snapshot(for intent: SelectServicesIntent, in context: Context) async -> QuotaEntry {
+    func snapshot(for intent: SelectProviderSlotsIntent, in context: Context) async -> QuotaEntry {
         let snap = context.isPreview ? .sample : (QuotaSnapshot.load() ?? .sample)
         return QuotaEntry(date: Date(), snapshot: snap,
-                          shown: intent.services.resolved(appDefault: snap.shown))
+                          shown: intent.resolved(appDefault: snap.shown))
     }
 
-    func timeline(for intent: SelectServicesIntent, in context: Context) async -> Timeline<QuotaEntry> {
+    func timeline(for intent: SelectProviderSlotsIntent, in context: Context) async -> Timeline<QuotaEntry> {
         let snap = QuotaSnapshot.load()
         let now = Date()
-        let shown = intent.services.resolved(appDefault: snap?.shown ?? [.codex, .claude])
+        let shown = intent.resolved(appDefault: snap?.shown ?? [.codex, .claude])
 
         // 在每个即将到来的重置时间点放一个条目，让 LED 到点自动变绿
         var dates: [Date] = [now]

@@ -81,6 +81,17 @@ enum ServiceData {
     }
 }
 
+extension ServiceData {
+    func limitedWindows(_ limit: Int) -> ServiceData {
+        switch self {
+        case .ready(let plan, let windows, let asOf):
+            return .ready(plan: plan, windows: Array(windows.prefix(limit)), asOf: asOf)
+        default:
+            return self
+        }
+    }
+}
+
 enum LangPref: String, CaseIterable {
     case system, zh, en
 
@@ -95,23 +106,68 @@ enum LangPref: String, CaseIterable {
 }
 
 enum Service: String, Codable, CaseIterable {
-    case codex, claude, gemini
+    case codex, claude, gemini, zcode
 
     var displayName: String {
         switch self {
         case .codex:  return "Codex"
         case .claude: return "Claude"
         case .gemini: return "Gemini"
+        case .zcode:  return "ZCode"
         }
     }
 }
 
-/// 显示哪些服务——最多两个：单选 3 种 + 双选 3 种
-enum ServiceFilter: String, CaseIterable {
+/// 设置页第二个服务槽位：可不显示，也可任选一个供应商。
+enum ServiceSlot: String, Codable, CaseIterable {
+    case none, codex, claude, gemini, zcode
+
+    init(service: Service?) {
+        switch service {
+        case .codex:  self = .codex
+        case .claude: self = .claude
+        case .gemini: self = .gemini
+        case .zcode:  self = .zcode
+        case .none:   self = .none
+        }
+    }
+
+    var service: Service? {
+        switch self {
+        case .none:   return nil
+        case .codex:  return .codex
+        case .claude: return .claude
+        case .gemini: return .gemini
+        case .zcode:  return .zcode
+        }
+    }
+
+    var labelKey: String {
+        switch self {
+        case .none:   return "service_none"
+        case .codex:  return "services_codex"
+        case .claude: return "services_claude"
+        case .gemini: return "services_gemini"
+        case .zcode:  return "services_zcode"
+        }
+    }
+}
+
+enum ServiceSelection {
+    static func shown(primary: Service, secondary: ServiceSlot) -> [Service] {
+        var result = [primary]
+        if let service = secondary.service, service != primary {
+            result.append(service)
+        }
+        return result
+    }
+}
+
+/// 旧版固定组合设置，仅用于迁移 UserDefaults 中的 `services`。
+enum LegacyServiceFilter: String {
     case codex, claude, gemini
     case codexClaude, codexGemini, claudeGemini
 
-    /// 按固定顺序（codex→claude→gemini）返回要显示的服务
     var shown: [Service] {
         switch self {
         case .codex:        return [.codex]
@@ -120,20 +176,6 @@ enum ServiceFilter: String, CaseIterable {
         case .codexClaude:  return [.codex, .claude]
         case .codexGemini:  return [.codex, .gemini]
         case .claudeGemini: return [.claude, .gemini]
-        }
-    }
-
-    func shows(_ service: Service) -> Bool { shown.contains(service) }
-
-    /// 对应的本地化标签键
-    var labelKey: String {
-        switch self {
-        case .codex:        return "services_codex"
-        case .claude:       return "services_claude"
-        case .gemini:       return "services_gemini"
-        case .codexClaude:  return "services_codex_claude"
-        case .codexGemini:  return "services_codex_gemini"
-        case .claudeGemini: return "services_claude_gemini"
         }
     }
 }

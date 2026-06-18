@@ -1,9 +1,10 @@
 #!/bin/zsh
 # 生成 Xcode 工程并构建 Quotient.app（含桌面小组件扩展）到 dist/，同时产出可分发 zip
 set -e
+set -o pipefail
 cd "$(dirname "$0")"
 
-VERSION=1.0.1
+VERSION=1.0.2
 
 xcodegen generate
 
@@ -19,10 +20,16 @@ cp -R .build/DerivedData/Build/Products/Release/Quotient.app dist/
 
 ditto -c -k --keepParent dist/Quotient.app "dist/Quotient-$VERSION.zip"
 
-# 注销 DerivedData 里那份构建产物的 Launch Services 注册，避免与已安装副本
-# 出现同 bundle id 的重复注册（会让桌面小组件绑到错误的扩展、配置项不显示）
+# 注销 DerivedData 里的构建产物注册，避免与已安装副本出现同 bundle id
+# 的重复注册（会让桌面小组件绑到错误的扩展、配置项不显示）
 LSREG=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
-"$LSREG" -u .build/DerivedData/Build/Products/Release/Quotient.app 2>/dev/null || true
+for app in \
+  .build/DerivedData/Build/Products/Release/Quotient.app \
+  .build/DerivedData/Build/Products/Debug/Quotient.app \
+  dist/Quotient.app
+do
+  "$LSREG" -u "$app" 2>/dev/null || true
+done
 
 echo "✅ 构建完成: dist/Quotient.app"
 echo "📦 分发包:   dist/Quotient-$VERSION.zip"

@@ -4,9 +4,12 @@ import WidgetKit
 
 @MainActor
 final class UsageStore: ObservableObject {
+    private static let geminiWindowLimit = 2
+
     @Published var codex: ServiceData = .loading
     @Published var claude: ServiceData = .loading
     @Published var gemini: ServiceData = .loading
+    @Published var zcode: ServiceData = .loading
     @Published var now = Date()
 
     @Published var langPref: LangPref {
@@ -15,9 +18,22 @@ final class UsageStore: ObservableObject {
             persistSnapshot()
         }
     }
-    @Published var services: ServiceFilter {
+    @Published var primaryService: Service {
         didSet {
-            UserDefaults.standard.set(services.rawValue, forKey: "services")
+            if secondaryService.service == primaryService {
+                secondaryService = .none
+            }
+            UserDefaults.standard.set(primaryService.rawValue, forKey: "primaryService")
+            persistSnapshot()
+        }
+    }
+    @Published var secondaryService: ServiceSlot {
+        didSet {
+            if secondaryService.service == primaryService {
+                secondaryService = .none
+                return
+            }
+            UserDefaults.standard.set(secondaryService.rawValue, forKey: "secondaryService")
             persistSnapshot()
         }
     }
@@ -32,7 +48,6 @@ final class UsageStore: ObservableObject {
     }
     @Published var hidden: Bool {
         didSet {
-            UserDefaults.standard.set(hidden, forKey: "hidden")
             onHiddenChange?(hidden)
         }
     }
@@ -49,15 +64,28 @@ final class UsageStore: ObservableObject {
     init() {
         let defaults = UserDefaults.standard
         langPref = LangPref(rawValue: defaults.string(forKey: "langPref") ?? "") ?? .system
-        services = ServiceFilter(rawValue: defaults.string(forKey: "services") ?? "") ?? .codexClaude
+        if let rawPrimary = defaults.string(forKey: "primaryService"),
+           let primary = Service(rawValue: rawPrimary) {
+            primaryService = primary
+            secondaryService = ServiceSlot(
+                rawValue: defaults.string(forKey: "secondaryService") ?? "") ?? .claude
+        } else {
+            let legacy = LegacyServiceFilter(
+                rawValue: defaults.string(forKey: "services") ?? "") ?? .codexClaude
+            let shown = legacy.shown
+            primaryService = shown.first ?? .codex
+            secondaryService = ServiceSlot(service: shown.dropFirst().first)
+        }
         pinned = defaults.object(forKey: "pinned") as? Bool ?? true
-        hidden = defaults.bool(forKey: "hidden")
+        hidden = false
+        defaults.removeObject(forKey: "hidden")
 
         // 冷启动先用磁盘上的上次结果填充，避免空窗/闪烁，断网时也有内容可看
         if let cached = QuotaSnapshot.load() {
             codex = cached.codex.asServiceData
             claude = cached.claude.asServiceData
-            gemini = cached.gemini.asServiceData
+            gemini = cached.gemini.asServiceData.limitedWindows(Self.geminiWindowLimit)
+            zcode = cached.zcode.asServiceData
         }
     }
 
@@ -66,8 +94,13 @@ final class UsageStore: ObservableObject {
         switch service {
         case .codex:  return codex
         case .claude: return claude
-        case .gemini: return gemini
+        case .gemini: return gemini.limitedWindows(Self.geminiWindowLimit)
+        case .zcode:  return zcode
         }
+    }
+
+    var shownServices: [Service] {
+        ServiceSelection.shown(primary: primaryService, secondary: secondaryService)
     }
 
     func start() {
@@ -84,6 +117,7 @@ final class UsageStore: ObservableObject {
     func refresh(force: Bool) {
         now = Date()
         codex = CodexReader.read()
+        zcode = ZCodeReader.read()
 
         // Claude / Gemini 走网络，5 分钟一次足够；手动刷新与重置触发时强制
         if force || now.timeIntervalSince(lastNetFetch) > 300 {
@@ -96,7 +130,8 @@ final class UsageStore: ObservableObject {
             }
             Task {
                 let result = await GeminiReader.read()
-                self.apply(result, to: \.gemini, transientPrefix: "gemini")
+                self.apply(result.limitedWindows(Self.geminiWindowLimit),
+                           to: \.gemini, transientPrefix: "gemini")
                 self.scheduleResetRefresh()
                 self.persistSnapshot()
             }
@@ -127,10 +162,11 @@ final class UsageStore: ObservableObject {
         QuotaSnapshot(
             codex: codex.snapshot,
             claude: claude.snapshot,
-            gemini: gemini.snapshot,
+            gemini: gemini.limitedWindows(Self.geminiWindowLimit).snapshot,
+            zcode: zcode.snapshot,
             lang: lang.rawValue,
             generatedAt: Date(),
-            shown: services.shown
+            shown: shownServices
         ).save()
         WidgetCenter.shared.reloadAllTimelines()
         onLedChange?(overallLed)
@@ -139,7 +175,7 @@ final class UsageStore: ObservableObject {
     /// 在最近的额度重置时间点之后再刷新一次
     private func scheduleResetRefresh() {
         resetTimer?.invalidate()
-        let upcoming = (codex.windows + claude.windows + gemini.windows)
+        let upcoming = (codex.windows + claude.windows + gemini.windows + zcode.windows)
             .compactMap(\.resetsAt)
             .filter { $0 > now }
             .min()
@@ -153,6 +189,6 @@ final class UsageStore: ObservableObject {
     }
 
     var overallLed: Led {
-        Led.worst(services.shown.map { data(for: $0).led(now: now) })
+        Led.worst(shownServices.map { data(for: $0).led(now: now) })
     }
 }

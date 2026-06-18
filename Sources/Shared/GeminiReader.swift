@@ -11,6 +11,7 @@ import Foundation
 enum GeminiReader {
     private static let endpoint = "https://cloudcode-pa.googleapis.com/v1internal"
     private static let tokenURL = URL(string: "https://oauth2.googleapis.com/token")!
+    private static let modelGroupDisplayLimit = 2
 
     // Gemini CLI 公开分发的 OAuth「安装型应用」客户端凭据（非个人密钥，
     // 来自 Apache-2.0 开源的 gemini-cli）。以字节数组存放，仅为避免明文密钥扫描误报。
@@ -101,7 +102,7 @@ enum GeminiReader {
     // MARK: - 解析：按 Pro / Flash / Lite 归组，取每组最差余量
 
     private static func parse(_ buckets: [[String: Any]]) -> ServiceData {
-        // (排序权重, 标签) —— Pro 最重要排最前
+        // (排序权重, 标签) —— 默认只显示前两组，保持每个服务两行以内
         func group(_ modelId: String) -> (Int, String)? {
             let m = modelId.lowercased()
             if m.contains("pro") { return (0, "Pro") }
@@ -133,6 +134,7 @@ enum GeminiReader {
 
         let windows = groups
             .sorted { $0.value.order < $1.value.order }
+            .prefix(modelGroupDisplayLimit)
             .map { label, v in
                 WindowQuota(id: "gemini_\(label)", windowMinutes: nil, labelKey: nil,
                             usedPercent: 100 - v.agg.remaining, resetsAt: v.agg.reset,
