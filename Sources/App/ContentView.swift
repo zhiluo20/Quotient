@@ -4,22 +4,29 @@ struct ContentView: View {
     @EnvironmentObject var store: UsageStore
     @State private var hovering = false
 
+    /// 固定两列：恒定展示全部 4 个服务，不再受设置里下拉框筛选影响。
+    private let gridColumns: [GridItem] = [
+        GridItem(.flexible(), spacing: 16, alignment: .topLeading),
+        GridItem(.flexible(), spacing: 16, alignment: .topLeading),
+    ]
+
     var body: some View {
-        HStack(alignment: .top, spacing: 14) {
-            let shown = store.shownServices
-            ForEach(Array(shown.enumerated()), id: \.element) { index, service in
-                if index > 0 {
-                    Divider().opacity(0.25)
+        ScrollView(.vertical, showsIndicators: false) {
+            LazyVGrid(columns: gridColumns, alignment: .leading, spacing: 16) {
+                ForEach(Service.allCases, id: \.self) { service in
+                    ServiceColumnView(name: service.displayName,
+                                      service: store.data(for: service).snapshot,
+                                      now: store.now, lang: store.lang)
                 }
-                ServiceColumnView(name: service.displayName,
-                                  service: store.data(for: service).snapshot,
-                                  now: store.now, lang: store.lang)
             }
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
+            .padding(.bottom, 14)
+            // 宽度固定两列，高度撑满 hosting view（由 NSPanel 决定），超出则滚动
+            .frame(maxWidth: .infinity, alignment: .top)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 16)
-        .padding(.bottom, 14)
-        .frame(width: store.shownServices.count > 1 ? 384 : 208, alignment: .topLeading)
+        // 固定宽度容纳两列；高度自适应外层 NSPanel，可任意拖拽
+        .frame(width: 400, alignment: .top)
         .background(GlassBackground())
         .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
         .overlay(

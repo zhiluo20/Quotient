@@ -20,6 +20,12 @@ struct SettingsView: View {
                             .disabled(slot.service == store.primaryService)
                     }
                 }
+            } header: {
+                Text(L10n.t("settings_title", store.lang))
+            } footer: {
+                Text(L10n.t("settings_widget_only_hint", store.lang))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             Picker(L10n.t("language_label", store.lang), selection: $store.langPref) {
                 Text(L10n.t("lang_system", store.lang)).tag(LangPref.system)
