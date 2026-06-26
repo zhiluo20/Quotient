@@ -4,7 +4,7 @@
 set -e
 cd "$(dirname "$0")/.."
 
-VERSION=1.0.2
+VERSION=1.0.3
 APP=dist/Quotient.app
 DMG="dist/Quotient-$VERSION.dmg"
 

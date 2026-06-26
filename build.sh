@@ -4,7 +4,7 @@ set -e
 set -o pipefail
 cd "$(dirname "$0")"
 
-VERSION=1.0.2
+VERSION=1.0.3
 
 xcodegen generate
 
