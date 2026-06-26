@@ -3,9 +3,13 @@ import Security
 
 /// 使用 Claude Code 已有的本地登录态查询官方 OAuth 用量接口。
 ///
-/// 隐私：accessToken 只在内存中用于请求头；access token 过期时用本地 refreshToken
-/// 静默续期（与 Claude Code 同一套 OAuth 流程），并把轮换后的新凭据写回原来的存储位置，
-/// 与 Claude Code 保持同步。不向任何第三方上传，也不显示任何 token。
+/// 钥匙串只读策略：凭据存在 macOS 钥匙串里时，Quotient **绝不写入**。原因是写入
+/// （SecItemUpdate）会重置该钥匙串记录的 ACL，导致所有“始终允许”失效、反复弹密码窗。
+/// token 的刷新交给 Claude Code 自己（它是这条记录的属主，会自行续期）；Quotient 只读取
+/// 当前 access token。只有当凭据来自普通文件（~/.claude/.credentials.json）时才会续期并写回，
+/// 因为文件写入不涉及钥匙串 ACL。
+///
+/// 隐私：accessToken 只在内存中用于请求头，不向任何第三方上传，也不显示任何 token。
 enum ClaudeReader {
     private static let usageURL = URL(string: "https://api.anthropic.com/api/oauth/usage")!
     private static let tokenURL = URL(string: "https://platform.claude.com/v1/oauth/token")!
@@ -17,8 +21,10 @@ enum ClaudeReader {
             return .unavailable(messageKey: "claude_not_logged_in")
         }
 
-        // access token 已过期（或快过期）则先续期，避免一次必然失败的请求
+        // token 过期：仅当凭据来自文件（写回不影响钥匙串 ACL）才续期；
+        // 钥匙串凭据保持只读，过期就当作暂时不可用、沿用上次缓存，等 Claude Code 自己刷新。
         if cred.isExpired {
+            guard cred.writable else { return .unavailable(messageKey: "claude_offline") }
             switch await refresh(cred) {
             case .success(let updated): cred = updated
             case .needsLogin: return .unavailable(messageKey: "claude_expired")
@@ -30,7 +36,8 @@ enum ClaudeReader {
         case .ok(let obj):
             return parse(obj)
         case .unauthorized:
-            // token 在服务端被提前失效：再续一次重试
+            // token 被服务端提前失效：可写则续一次重试，钥匙串只读则沿用缓存
+            guard cred.writable else { return .unavailable(messageKey: "claude_offline") }
             switch await refresh(cred) {
             case .success(let updated):
                 if case .ok(let obj) = await fetchUsage(token: updated.accessToken) {
@@ -179,6 +186,9 @@ struct Credentials {
         Date().timeIntervalSince1970 * 1000 >= expiresAtMs - 60_000
     }
 
+    /// 是否可安全写回：仅文件凭据可写。钥匙串凭据只读，避免写入重置 ACL 触发反复弹窗。
+    var writable: Bool { !fromKeychain }
+
     static func load() -> Credentials? {
         if let data = keychainData(), let c = decode(data, fromKeychain: true) { return c }
         if let data = fileData(), let c = decode(data, fromKeychain: false) { return c }
@@ -198,8 +208,11 @@ struct Credentials {
             rawRoot: root, fromKeychain: fromKeychain)
     }
 
-    /// 把续期后的 token 写回原存储位置，保留其余字段
+    /// 把续期后的 token 写回原存储位置，保留其余字段。
+    /// 注意：**绝不写钥匙串**——写入会重置 ACL 触发反复弹密码窗。钥匙串凭据由 Claude Code
+    /// 自己续期，Quotient 只读。仅文件凭据在这里写回。
     func persist() {
+        guard !fromKeychain else { return }
         var root = rawRoot
         if var oauth = root["claudeAiOauth"] as? [String: Any] {
             oauth["accessToken"] = accessToken
@@ -212,18 +225,9 @@ struct Credentials {
             root["expiresAt"] = expiresAtMs
         }
         guard let data = try? JSONSerialization.data(withJSONObject: root) else { return }
-
-        if fromKeychain {
-            let query: [String: Any] = [
-                kSecClass as String: kSecClassGenericPassword,
-                kSecAttrService as String: Self.service,
-            ]
-            SecItemUpdate(query as CFDictionary, [kSecValueData as String: data] as CFDictionary)
-        } else {
-            let url = FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent(".claude/.credentials.json")
-            try? data.write(to: url, options: .atomic)
-        }
+        let url = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".claude/.credentials.json")
+        try? data.write(to: url, options: .atomic)
     }
 
     private static func keychainData() -> Data? {
